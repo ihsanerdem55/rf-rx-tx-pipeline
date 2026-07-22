@@ -11,11 +11,11 @@ Requires **MATLAB R2021a or later** (`uifigure`, scrollable `uigridlayout`,
 ## Running
 
 ```matlab
->> rf_rxtx_chain_multi_emitter_esm
+>> rf_rxtx_pipeline
 ```
 
 The entry point adds `lib/` (and its subfolders) to the path automatically, so
-you only need `rf_rxtx_chain_multi_emitter_esm.m` on your path or to be in this
+you only need `rf_rxtx_pipeline.m` on your path or to be in this
 folder when you launch it.
 
 ## Project layout
@@ -25,7 +25,7 @@ core plus a library of single-purpose functions, one function per file, grouped
 by concern:
 
 ```
-rf_rxtx_chain_multi_emitter_esm.m   App core: GUI construction, the pipeline
+rf_rxtx_pipeline.m                   App core: GUI construction, the pipeline
                                     driver, the four processing "chains", and
                                     all drawing/results code. These functions
                                     share the GUI state (model S, view h,
@@ -61,7 +61,7 @@ lib/
 
 MATLAB nested functions share the parent workspace and must live in the same
 file, so the functions that read or write the shared GUI state (`S`, `h`,
-`cal`) remain nested inside `rf_rxtx_chain_multi_emitter_esm.m`. Every function
+`cal`) remain nested inside `rf_rxtx_pipeline.m`. Every function
 that is **pure** — it takes its inputs as arguments and returns its outputs,
 touching none of the shared state — was moved out to its own file under `lib/`.
 The extraction was verified to be behaviour-preserving: each moved function's

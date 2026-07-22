@@ -1,4 +1,4 @@
-function rf_rxtx_chain_multi_emitter_esm
+function rf_rxtx_pipeline
 % RF_RXTX_CHAIN  Interactive RF receive / retransmit simulation (educational DSP demo).
 %
 %   A single-file MATLAB app that walks a pulsed RF signal through a complete
@@ -97,8 +97,8 @@ function rf_rxtx_chain_multi_emitter_esm
 %
 %   Requires R2021a or later (uifigure, scrollable uigridlayout, uitabgroup).
 %
-%   USAGE:  save as rf_rxtx_chain_ew_duel.m, then at the MATLAB prompt type:
-%               >> rf_rxtx_chain_ew_duel
+%   USAGE:  save as rf_rxtx_pipeline.m, then at the MATLAB prompt type:
+%               >> rf_rxtx_pipeline
 %
 %   Units in the GUI: frequencies in MHz, times in microseconds (us).
 % -------------------------------------------------------------------------
@@ -110,7 +110,7 @@ addpath(genpath(fullfile(fileparts(mfilename('fullpath')), 'lib')));
 
 S = struct();     % computed signals / results (the "model")
 h = struct();     % UI handles                (the "view")
-fprintf('Launching rf_rxtx_chain_ew_duel: victim ECCM, clutter/MTI, CFAR, VGPO, cover pulses, and noise jamming enabled.\n');
+fprintf('Launching rf_rxtx_pipeline: victim ECCM, clutter/MTI, CFAR, VGPO, cover pulses, and noise jamming enabled.\n');
 
 % Array calibration: the measured inter-channel phase (and gain) offsets that
 % a boresight reference reveals, to be subtracted before direction finding.
