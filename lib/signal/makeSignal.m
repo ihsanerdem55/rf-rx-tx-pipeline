@@ -32,14 +32,14 @@
         c1 = complex(zeros(1,Ntot));
         c2 = complex(zeros(1,Ntot));
         c3 = complex(zeros(1,Ntot));
-        lfm = strcmp(P.modtype,'LFM chirp');
-        K = 0; if lfm, K = P.bchirp/P.PW; end
+        isCh = isCompressible(P);            % LFM/NLFM sweep or phase code present
 
         fcProcTrue = P.Fctr + hopTrue + P.fdRx;
         rfTrue = P.Frf + hopTrue + P.fdRx;
         for k = 1:P.Np
             fproc = fcProcTrue(k);
             lambda = P.c/max(rfTrue(k),eps);
+            gscan = scanGain(emitTimes(k), P);   % antenna-scan amplitude at emission
 
             % ---------------- direct path ----------------
             t0 = arrival(k);
@@ -48,8 +48,8 @@
                 gate(idx) = 1;
                 tl = t(idx)-(t0+P.PW/2);
                 intra = zeros(size(tl));
-                if lfm, intra = pi*K*tl.^2; end
-                b = exp(1i*(2*pi*fproc*t(idx)+intra));
+                if isCh, intra = chirpPhase(tl, P); end
+                b = gscan*exp(1i*(2*pi*fproc*t(idx)+intra));
                 dF = 2*pi*P.base*sind(P.Az)/lambda;
                 dS = 2*pi*P.bshort*sind(P.Az)/lambda;
                 c1(idx) = c1(idx)+b;
@@ -64,12 +64,12 @@
                 if ~isempty(im)
                     tlm = t(im)-(tm+P.PW/2);
                     intraM = zeros(size(tlm));
-                    if lfm, intraM = pi*K*tlm.^2; end
+                    if isCh, intraM = chirpPhase(tlm, P); end
                     % Ground reflection: excess propagation phase plus a pi
                     % phase reversal. Using the RF phase makes small path-delay
                     % changes produce realistic constructive/destructive fading.
                     reflPhase = -2*pi*rfTrue(k)*P.mpdelay + pi;
-                    bm = P.mpamp*exp(1i*(2*pi*fproc*t(im)+intraM+reflPhase));
+                    bm = gscan*P.mpamp*exp(1i*(2*pi*fproc*t(im)+intraM+reflPhase));
                     dFm = 2*pi*P.base*sind(P.mpaz)/lambda;
                     dSm = 2*pi*P.bshort*sind(P.mpaz)/lambda;
                     c1(im) = c1(im)+bm;

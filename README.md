@@ -18,6 +18,40 @@ The entry point adds `lib/` (and its subfolders) to the path automatically, so
 you only need `rf_rxtx_pipeline.m` on your path or to be in this
 folder when you launch it.
 
+## Emitter antenna scan
+
+The *Emitter antenna scan* control models a scanning emitter beam that
+amplitude-modulates the received pulse train: **Circular** (a rotating search
+beam gives one mainlobe flash per revolution) or **Conical** (a nutating
+tracker gives sinusoidal modulation at the scan rate). The receiver estimates
+the scan rate from the dominant line in the slow-time spectrum of the pulse
+*amplitudes* (Doppler lives in the phase), and the result panel reports true vs
+estimated rate. As with Doppler, the scan rate is only recoverable below PRF/2
+and when the CPI spans at least one scan cycle — raise *N pulses* to resolve
+slower scans (the panel flags both limits).
+
+## Demos
+
+Standalone scripts under `demos/` run in **base MATLAB with no GUI and no
+display**, so the DSP core can be exercised and validated headlessly:
+
+```matlab
+>> addpath demos
+>> pulse_compression_demo          % prints tables (+ plots if a display exists)
+>> pulse_compression_demo(false)   % tables only
+```
+
+`pulse_compression_demo` shows two teaching experiments — receive weighting on
+an LFM matched filter (the range-sidelobe / mainlobe-width trade-off, reusing
+the app's `pcWindow` taper) and a waveform comparison (CW vs LFM vs NLFM vs a
+Barker-13 phase code). The **NLFM chirp** and **Barker-13 code** are also
+selectable in the app's *Mod type* control alongside CW and LFM: NLFM's
+stationary-phase design lowers range sidelobes (~ -24 dB) without the SNR loss
+of a receive window, and the Barker code compresses to a chip-wide peak
+(~ -22 dB). For a phase code the range resolution is set by the chip rate
+(`effBW = code length / PW`), which the app uses in place of the sweep
+bandwidth throughout.
+
 ## Project layout
 
 The app used to be a single ~3800-line file. It is now split into a small app

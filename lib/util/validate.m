@@ -76,7 +76,7 @@
         P.kbeta = min(20, max(0, P.kbeta));    % Kaiser beta 0..20
 
         % --- LFM chirp: keep the sweep inside the sampled band ------------
-        if strcmp(P.modtype, 'LFM chirp')
+        if isChirp(P)
             if P.bchirp < 0
                 P.bchirp = abs(P.bchirp);
                 notes{end+1} = 'Negative chirp BW interpreted as a positive bandwidth.';
@@ -100,7 +100,7 @@
         end
 
         chirpHalf = 0;
-        if strcmp(P.modtype,'LFM chirp'), chirpHalf = P.bchirp/2; end
+        if isCompressible(P), chirpHalf = effBW(P)/2; end
 
         % --- moving emitter, multipath and agility -----------------------
         if ~isfinite(P.vrad), P.vrad = 0; end
@@ -121,9 +121,23 @@
         if P.multipath && P.mpdelay == 0
             notes{end+1} = 'Multipath delay is zero: reflection only changes amplitude/DF phase, not range.';
         end
-        if P.multipath && strcmp(P.modtype,'LFM chirp') && P.bchirp > 0 && ...
-                P.mpdelay < 1/P.bchirp
+        if P.multipath && isCompressible(P) && effBW(P) > 0 && ...
+                P.mpdelay < 1/effBW(P)
             notes{end+1} = 'Multipath delay is below approximately 1/B: direct and reflected range peaks are unresolved.';
+        end
+
+        % --- antenna scan modulation -------------------------------------
+        if ~isfield(P,'scanmode'), P.scanmode = 'Off'; end
+        P.scanrate = max(0, P.scanrate);
+        P.scanbw   = min(180, max(0.5, P.scanbw));
+        if ~strcmp(P.scanmode,'Off')
+            prfTrue = 1/P.PRI;
+            if P.scanrate > 0.5*prfTrue
+                notes{end+1} = sprintf('Scan rate above PRF/2 (%.0f Hz): the scan-rate estimate will alias.', 0.5*prfTrue);
+            end
+            if P.scanrate*P.Np*P.PRI < 1
+                notes{end+1} = 'Under one scan cycle in the CPI: raise N pulses (or scan rate) to resolve the scan.';
+            end
         end
 
         P.pridev = min(0.45, max(0, P.pridev));
@@ -229,7 +243,7 @@
         end
 
         % --- RF front-end / domain sanity ---------------------------------
-        chirpHalf = 0; if strcmp(P.modtype,'LFM chirp'), chirpHalf = P.bchirp/2; end
+        chirpHalf = 0; if isCompressible(P), chirpHalf = effBW(P)/2; end
         if P.iq
             % Baseband: content spans +/-(chirpHalf); need that < Nyquist.
             if chirpHalf >= nyq

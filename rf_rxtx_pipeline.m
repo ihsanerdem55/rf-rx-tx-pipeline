@@ -138,13 +138,13 @@ runPipeline(false);    % populate everything with the defaults on launch
         % height (no '1x'), so when the total content is taller than the
         % viewport a scrollbar appears -- fixing panels that don't fully fit.
         ctrlPanel = uipanel(outer, 'Title', 'Controls', 'Scrollable', 'on');
-        cg = uigridlayout(ctrlPanel, [58 4]);
+        cg = uigridlayout(ctrlPanel, [61 4]);
         cg.Scrollable = 'on';               % <-- scrollbar on the control grid
         % Fixed-height rows keep the expanded EW-duel controls predictable;
         % the parent panel remains scrollable.
-        cg.RowHeight = repmat({28}, 1, 58);
-        cg.RowHeight{57} = 32;               % run buttons
-        cg.RowHeight{58} = 1320;             % results / diagnostics
+        cg.RowHeight = repmat({28}, 1, 61);
+        cg.RowHeight{60} = 32;               % run buttons
+        cg.RowHeight{61} = 1320;             % results / diagnostics
         cg.ColumnWidth = {90, '1x', 90, '1x'};
         cg.RowSpacing = 4;
         cg.Padding = [8 8 8 8];
@@ -156,8 +156,10 @@ runPipeline(false);    % populate everything with the defaults on launch
         h.Fif = numL(cg, r, 'IF (MHz)',       4);                                              r = r+1;
         h.PRI = numL(cg, r, 'PRI (us)',     100);      h.PW  = numR(cg, r, 'PW (us)',   10);   r = r+1;
         h.Np  = numL(cg, r, 'N pulses',       8, '%d'); h.SNR = numR(cg, r, 'SNR (dB)',  15);  r = r+1;
-        h.Mod = dropFull(cg, r, 'Mod type', {'CW', 'LFM chirp'}, 'CW'); r = r+1;
-        h.Bch = numL(cg, r, 'Chirp BW MHz',   3);                                              r = r+1;
+        h.Mod = dropFull(cg, r, 'Mod type', {'CW', 'LFM chirp', 'NLFM chirp', 'Barker-13 code'}, 'CW'); r = r+1;
+        h.Bch = numL(cg, r, 'Chirp BW MHz',   3);
+        h.PCwin = dropFullAt(cg, r, 3, 4, 'PC window', ...
+            {'None','Hann','Taylor','Hamming','Blackman'}, 'None'); r = r+1;
 
         sec4(cg, r, 'SOURCE GEOMETRY  (ground truth)'); r = r+1;
         h.Rng = numL(cg, r, 'Range (km)',    15);      h.Az  = numR(cg, r, 'Azim (deg)', 20);  r = r+1;
@@ -166,6 +168,10 @@ runPipeline(false);    % populate everything with the defaults on launch
         h.Vrad = numL(cg, r, 'Rad vel m/s',   0);      h.MPloss = numR(cg, r, 'MP loss dB', 10); r = r+1;
         h.MPdly = numL(cg, r, 'MP extra us',  3);      h.MPaz = numR(cg, r, 'MP az deg', -15);  r = r+1;
         h.MPmode = dropFull(cg, r, 'Multipath', {'Off', 'On'}, 'Off'); r = r+1;
+
+        sec4(cg, r, 'EMITTER ANTENNA SCAN'); r = r+1;
+        h.Scan = dropFull(cg, r, 'Scan mode', {'Off', 'Circular', 'Conical'}, 'Off'); r = r+1;
+        h.ScanRate = numL(cg, r, 'Scan rate Hz', 2000); h.ScanBW = numR(cg, r, 'Beamwidth deg', 20); r = r+1;
 
         sec4(cg, r, 'EMITTER PRI / FREQUENCY AGILITY'); r = r+1;
         h.PRImode = dropFull(cg, r, 'PRI mode', ...
@@ -362,6 +368,7 @@ runPipeline(false);    % populate everything with the defaults on launch
         % intra-pulse modulation (generator)
         P.modtype = h.Mod.Value;               % 'CW' or 'LFM chirp'
         P.bchirp  = h.Bch.Value * 1e6;         % LFM sweep bandwidth (Hz)
+        P.pcwin   = h.PCwin.Value;             % Rx matched-filter taper (sidelobes)
         % DRFM deception (transmitter)
         P.drdelay = h.Dly.Value * 1e-6;        % range gate pull-off delay (s)
         P.dop     = h.Dop.Value * 1e3;         % initial deception Doppler (Hz)
@@ -404,6 +411,9 @@ runPipeline(false);    % populate everything with the defaults on launch
         P.mploss = h.MPloss.Value;             % reflected-path voltage loss in dB
         P.mpdelay = h.MPdly.Value * 1e-6;      % excess reflected-path delay (s)
         P.mpaz = h.MPaz.Value;                 % apparent arrival angle of reflection
+        P.scanmode = h.Scan.Value;             % antenna scan: Off / Circular / Conical
+        P.scanrate = h.ScanRate.Value;         % scan / nutation rate (Hz)
+        P.scanbw   = h.ScanBW.Value;           % beam -3 dB width (deg), circular flash
         P.primode = h.PRImode.Value;
         P.pridev = h.PRIdev.Value / 100;       % fractional stagger/jitter depth
         P.fhmode = h.FHmode.Value;
@@ -533,6 +543,8 @@ runPipeline(false);    % populate everything with the defaults on launch
         R.pc_snrOut       = C.snrOut;
         R.pc_gainMeasured = C.gainMeasured;
         R.pc_Ncoh         = C.Ncoh;
+        R.pc_psl          = C.psl;
+        R.pc_win          = C.pcWin;
 
         if C.active && isfinite(C.tauEst)
             R.tau_est = C.tauEst;
@@ -613,8 +625,8 @@ runPipeline(false);    % populate everything with the defaults on launch
             ia=rise(k); ib=min(numel(z1),ia+L-1); idx=ia:ib;
             tt=(idx-1)/Fs; tl=tt-((rise(k)-1)/Fs+P.PW/2);
             seg=z1(idx);
-            if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
-                seg=seg.*exp(-1i*pi*(P.bchirp/P.PW)*tl.^2);
+            if isCompressible(P)
+                seg=seg.*exp(-1i*chirpPhase(tl,P));
             end
             w=0.5-0.5*cos(2*pi*(0:numel(seg)-1)/max(1,numel(seg)-1));
             X=abs(fftshift(fft(seg.*w,Nfft)));
@@ -650,8 +662,8 @@ runPipeline(false);    % populate everything with the defaults on launch
             ia=rise(k); ib=min(numel(z1),ia+L-1); idx=ia:ib;
             tt=(idx-1)/Fs; tl=tt-((rise(k)-1)/Fs+P.PW/2);
             ref=ones(size(tt));
-            if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
-                ref=exp(1i*pi*(P.bchirp/P.PW)*tl.^2);
+            if isCompressible(P)
+                ref=exp(1i*chirpPhase(tl,P));
             end
             dehop=exp(-1i*2*pi*(P.Fctr+hopEst(k))*tt);
             coherent(k)=sum(z1(idx).*dehop.*conj(ref))/numel(idx);
@@ -678,8 +690,19 @@ runPipeline(false);    % populate everything with the defaults on launch
             velHat=fdHat*P.c/max(P.Frf,eps);
             mti=[0 diff(coherent)];
             A.mti_gain=20*log10((sqrt(mean(abs(mti).^2))+eps)/(sqrt(mean(abs(coherent).^2))+eps));
+
+            % Antenna-scan estimate: the beam sweep amplitude-modulates the
+            % pulse train, so the dominant line in the slow-time spectrum of the
+            % pulse AMPLITUDES (as opposed to phase, which carries Doppler) is
+            % the scan rate. Resolvable for rate < PRF/2 with >~1 cycle in CPI.
+            ampSeq=abs(coherent); ampDet=ampSeq-mean(ampSeq);
+            scanSpec=abs(E*(ampDet.*wp).');
+            scanSpec(fgrid<=0)=0;                 % positive frequencies only
+            [~,isc]=max(scanSpec); A.scan_rate_est=fgrid(isc);
+            A.scan_depth_est=(max(ampSeq)-min(ampSeq))/(max(ampSeq)+min(ampSeq)+eps);
         else
             fgrid=[]; pdDB=[]; fdHat=NaN; velAxis=[]; velHat=NaN; mti=0;
+            A.scan_rate_est=NaN; A.scan_depth_est=NaN;
         end
 
         % First-pulse excess-path range profile. LFM gives a compressed direct
@@ -688,9 +711,9 @@ runPipeline(false);    % populate everything with the defaults on launch
         post=round((P.PW+P.mpdelay+0.5*P.PW)*Fs);
         ia=max(1,rise(1)-pre); ib=min(numel(z1),rise(1)+post); idx=ia:ib;
         tt=(idx-1)/Fs;
-        if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
+        if isCompressible(P)
             tl=(0:L-1)/Fs-P.PW/2;
-            ref=exp(1i*pi*(P.bchirp/P.PW)*tl.^2);
+            ref=exp(1i*chirpPhase(tl,P));
             bb=z1(idx).*exp(-1i*2*pi*fhat(1)*tt);
             mf=conv(bb,conj(fliplr(ref)),'full'); rp=abs(mf);
             tprof=((ia-1)+(1:numel(mf))-L)/Fs;
@@ -916,10 +939,10 @@ runPipeline(false);    % populate everything with the defaults on launch
         end
 
         L=max(2,round(PW*Fs)); tp=(0:L-1)/Fs;
-        if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
-            K=P.bchirp/PW; tl=tp-PW/2;
-            ref=exp(1i*pi*K*tl.^2);
-            S.victim_rangeRes=P.c/(2*P.bchirp);
+        if isCompressible(P)
+            tl=tp-PW/2;
+            ref=exp(1i*chirpPhase(tl,P));
+            S.victim_rangeRes=P.c/(2*effBW(P));
         else
             ref=ones(1,L);
             S.victim_rangeRes=P.c*PW/2;
@@ -1486,7 +1509,7 @@ runPipeline(false);    % populate everything with the defaults on launch
                 'Units','normalized','HorizontalAlignment','center', ...
                 'FontWeight','bold','FontSize',15);
             text(ax1,0.5,0.43, ...
-                'Select "LFM chirp" and choose a non-zero chirp bandwidth.', ...
+                'Select "LFM chirp", "NLFM chirp" or "Barker-13 code".', ...
                 'Units','normalized','HorizontalAlignment','center');
             title(ax1,'Before / after matched filtering');
             ax1.XTick=[]; ax1.YTick=[];
@@ -1520,25 +1543,30 @@ runPipeline(false);    % populate everything with the defaults on launch
         xlim(ax1,xWide*us); ylim(ax1,[0 1.08]);
         xlabel(ax1,'Time relative to compressed TOA (\mus)');
         ylabel(ax1,'Normalized magnitude');
-        title(ax1,sprintf(['Wide %.2f us LFM pulse -> compressed peak  |  ' ...
+        title(ax1,sprintf(['Wide %.2f us %s -> compressed peak  |  ' ...
             'BT = %.1f, theoretical gain %.1f dB'], ...
-            P.PW*us,S.pc_TB,S.pc_gainTheory));
+            P.PW*us,P.modtype,S.pc_TB,S.pc_gainTheory));
         legend(ax1,legH,legT,'Location','best');
         grid(ax1,'on');
 
-        zoomHalf = max(5/P.bchirp,3*S.pc_width3dB);
+        zoomHalf = max(5/max(effBW(P),eps),3*S.pc_width3dB);
         idx = abs(S.pc_t-t0) <= zoomHalf;
         plot(ax2,(S.pc_t(idx)-t0)*us,S.pc_magDB(idx),'LineWidth',1.35);
         hold(ax2,'on');
         yline(ax2,-3,'--','-3 dB');
         xline(ax2,-S.pc_width3dB*us/2,':');
         xline(ax2, S.pc_width3dB*us/2,':');
+        if isfinite(S.pc_psl)
+            yline(ax2,S.pc_psl,'-.',sprintf('PSL %.1f dB',S.pc_psl), ...
+                'Color',[0.85 0.3 0.1]);
+        end
         hold(ax2,'off');
-        xlim(ax2,[-zoomHalf zoomHalf]*us); ylim(ax2,[-45 2]);
+        xlim(ax2,[-zoomHalf zoomHalf]*us); ylim(ax2,[-70 2]);
         xlabel(ax2,'Time relative to peak (\mus)');
         ylabel(ax2,'Normalized output (dB)');
-        title(ax2,sprintf(['Compressed mainlobe: measured -3 dB width %.3f us  |  ' ...
-            '1/B = %.3f us'],S.pc_width3dB*us,1/P.bchirp*us));
+        title(ax2,sprintf(['Compressed mainlobe: -3 dB width %.3f us | 1/B = %.3f us' ...
+            ' | window %s, PSL %.1f dB'], ...
+            S.pc_width3dB*us,1/effBW(P)*us,S.pc_win,S.pc_psl));
         grid(ax2,'on');
     end
 
@@ -1876,16 +1904,72 @@ runPipeline(false);    % populate everything with the defaults on launch
             txt=[txt,sprintf('\n\nNOTES\n-------------------------\n')];
             for k=1:numel(S.notes), txt=[txt,sprintf('- %s\n',S.notes{k})]; end %#ok<AGROW>
         end
+
+        % ---- Accuracy scorecard (estimate vs ground truth, at-a-glance) ----
+        % Relative-error metrics where truth is bounded away from zero; absolute
+        % thresholds for azimuth (deg) and radial velocity (m/s) since either
+        % true value can legitimately be zero.
+        relC   = abs(ferr)   / max(abs(ftruth*MHz), eps);
+        relPW  = abs(pwErr)  / max(P.PW*us,  eps);
+        relPRI = abs(priErr) / max(P.PRI*us, eps);
+        relRng = abs(rngErr) / max(P.Rng/1e3, eps);
+        velErr = S.vel_rx_est - P.vrad;
+        % Range error expressed in one-way range-resolution cells (the same
+        % resolution the app reports for pulse compression): teaches WHY LFM
+        % compression tightens the geolocation range far below the CW limit.
+        if isCompressible(P) && effBW(P) > 0
+            resCell = P.c / effBW(P);                 % one-way, c/B (chirp) or c/chip (code)
+            resTxt  = sprintf('c/B = %.1f m', resCell);
+        else
+            resCell = P.c / P.Fs;                     % one-way, sample-limited
+            resTxt  = sprintf('sample-limited c/Fs = %.1f m', resCell);
+        end
+        rngCells = abs(S.Rng_est - P.Rng) / max(resCell, eps);
+        scorecard = sprintf([ ...
+            'ACCURACY SCORECARD  (estimate vs ground truth)\n' ...
+            '-------------------------\n' ...
+            'quantity         true       est      abs err   score\n' ...
+            'Carrier  MHz  %9.4f %9.4f %+9.4f  %s\n' ...
+            'Pulse PW  us  %9.3f %9.3f %+9.3f  %s\n' ...
+            'PRI       us  %9.3f %9.3f %+9.3f  %s\n' ...
+            'Range     km  %9.3f %9.3f %+9.3f  %s\n' ...
+            'Azimuth  deg  %9.2f %9.2f %+9.2f  %s\n' ...
+            'Rad vel  m/s  %9.2f %9.2f %+9.2f  %s\n' ...
+            'Range error = %.2f resolution cells (%s)\n' ...
+            'score:  [ + ] within tol   [ ~ ] marginal   [ ! ] off   [ ? ] n/a\n\n'], ...
+            ftruth*MHz,  S.fc_center_est*MHz, ferr,   scoreBadge(relC,   0.01, 0.05), ...
+            P.PW*us,     S.PW_est*us,         pwErr,  scoreBadge(relPW,  0.02, 0.10), ...
+            P.PRI*us,    S.PRI_est*us,        priErr, scoreBadge(relPRI, 0.02, 0.10), ...
+            P.Rng/1e3,   S.Rng_est/1e3,       rngErr, scoreBadge(relRng, 0.02, 0.10), ...
+            P.Az,        S.Az_est,            azErr,  scoreBadge(abs(azErr),  1, 3), ...
+            P.vrad,      S.vel_rx_est,        velErr, scoreBadge(abs(velErr), 1, 5), ...
+            rngCells,    resTxt);
+        % Antenna-scan readout (only when a scan is active).
+        if ~strcmp(P.scanmode,'Off')
+            prfTrue = 1/max(P.PRI,eps);
+            scanBlk = sprintf([ ...
+                'ANTENNA SCAN\n-------------------------\n' ...
+                'Mode        : %s\n' ...
+                'Scan rate   : true %.0f Hz / est %.0f Hz\n' ...
+                'Mod depth   : %8.0f %%\n' ...
+                'Cycles in CPI: %7.2f   (PRF/2 limit %.0f Hz)\n\n'], ...
+                P.scanmode, P.scanrate, S.scan_rate_est, 100*S.scan_depth_est, ...
+                P.scanrate*P.Np*P.PRI, 0.5*prfTrue);
+        else
+            scanBlk = '';
+        end
+        txt=[scorecard, scanBlk, txt];
+
         h.results.Text=txt;
     end
 
     function s = pulseCompressionStatus()
         if isfield(S,'pc_active') && S.pc_active
-            s = 'ACTIVE (LFM matched filter)';
-        elseif strcmp(S.P.modtype,'LFM chirp')
+            s = sprintf('ACTIVE (%s matched filter)', S.P.modtype);
+        elseif isCompressible(S.P)
             s = 'INACTIVE (no valid compressed peak)';
         else
-            s = 'OFF (select LFM chirp)';
+            s = 'OFF (select a compressed waveform)';
         end
     end
 

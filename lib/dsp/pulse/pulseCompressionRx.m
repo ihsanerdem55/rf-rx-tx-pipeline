@@ -12,11 +12,12 @@
             'peakIdx',[],'peakTimes',[],'firstPeakIdx',NaN, ...
             'tauEst',NaN,'width3dB',NaN,'TB',NaN,'gainTheory',NaN, ...
             'toaRes',NaN,'radarRes',NaN,'snrIn',NaN,'snrOut',NaN, ...
-            'gainMeasured',NaN,'Ncoh',0);
+            'gainMeasured',NaN,'Ncoh',0,'psl',NaN,'pcWin','None');
 
         if nargin < 4, riseHint = []; end
         if nargin < 5, fcPulse = []; end
-        if ~strcmp(P.modtype,'LFM chirp') || ~(P.bchirp > 0) || isempty(z)
+        Beff = effBW(P);                      % sweep BW (chirp) or chip rate (code)
+        if ~isCompressible(P) || ~(Beff > 0) || isempty(z)
             return
         end
 
@@ -24,8 +25,10 @@
         L = max(2,round(P.PW*Fs));
         tp = (0:L-1)/Fs;
         tl = tp - P.PW/2;
-        K = P.bchirp/P.PW;
-        ref = exp(1i*pi*K*tl.^2);             % unit-amplitude rectangular LFM
+        ref = exp(1i*chirpPhase(tl, P));      % unit-amplitude chirp or phase code
+        pcwin = 'None'; if isfield(P,'pcwin'), pcwin = P.pcwin; end
+        ref = ref .* pcWindow(L, pcwin);      % receive taper for sidelobe control
+        C.pcWin = pcwin;
         Eref = sum(abs(ref).^2);
 
         % Remove carrier and hop frequency. When pulse-wise estimates are
@@ -72,7 +75,7 @@
         % Refine each expected PRI-spaced peak in a narrow local window, then
         % use three-point parabolic interpolation for fractional-sample TOA.
         localHalf = max(3,min(round(0.2*P.PW*Fs), ...
-            max(3,round(3*Fs/P.bchirp))));
+            max(3,round(3*Fs/Beff))));
         targets = targets(targets>=1 & targets<=numel(mag));
         nPeak = numel(targets);
         pidx = zeros(1,nPeak); ptime = NaN(1,nPeak);
@@ -100,6 +103,23 @@
         il = ip; while il > 1 && mag(il-1) >= thr3, il = il-1; end
         ir = ip; while ir < numel(mag) && mag(ir+1) >= thr3, ir = ir+1; end
 
+        % Peak sidelobe level (PSL): the highest response BEYOND the mainlobe
+        % nulls (not the -3 dB edges -- the skirt between the -3 dB points and
+        % the first null is part of the mainlobe and would swamp the true
+        % sidelobes). Walk out from the peak until the magnitude stops falling
+        % to locate the first null on each side, then search a local window so
+        % the PRI-spaced neighbouring compressed peaks are not counted.
+        nl = ip; while nl > 1        && mag(nl-1) <= mag(nl), nl = nl-1; end
+        nr = ip; while nr < numel(mag) && mag(nr+1) <= mag(nr), nr = nr+1; end
+        psHalf = max(nr-nl+1, round(min(0.4*P.PRI, 25/max(Beff,eps))*Fs));
+        ia2 = max(1,ip-psHalf); ib2 = min(numel(mag),ip+psHalf);
+        reg = ia2:ib2; reg = reg(reg < nl | reg > nr);
+        if isempty(reg)
+            C.psl = NaN;
+        else
+            C.psl = 20*log10(max(mag(reg))/max(peak,eps) + eps);
+        end
+
         % Estimate input/output SNR using protected pulse/peak regions. These are
         % display diagnostics; the theoretical coherent gain remains 10log10(BT).
         envBB = abs(bb);
@@ -116,7 +136,7 @@
         C.snrIn = 20*log10(max(sigAmpIn,eps)/max(noiseAmpIn,eps));
 
         sigMaskOut = false(size(mag));
-        protect = max(2,round(2*Fs/P.bchirp));
+        protect = max(2,round(2*Fs/Beff));
         for q = 1:numel(pidx)
             ia = max(1,pidx(q)-protect); ib = min(numel(mag),pidx(q)+protect);
             sigMaskOut(ia:ib) = true;
@@ -138,8 +158,8 @@
         C.firstPeakIdx = ip;
         C.tauEst = ptime(1);
         C.width3dB = (ir-il+1)/Fs;
-        C.TB = P.PW*P.bchirp;
+        C.TB = P.PW*Beff;
         C.gainTheory = 10*log10(max(C.TB,1));
-        C.toaRes = P.c/P.bchirp;               % one-way R=c*tau resolution scale
-        C.radarRes = P.c/(2*P.bchirp);         % conventional monostatic radar
+        C.toaRes = P.c/Beff;               % one-way R=c*tau resolution scale
+        C.radarRes = P.c/(2*Beff);         % conventional monostatic radar
     end
