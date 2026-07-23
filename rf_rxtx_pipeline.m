@@ -157,7 +157,8 @@ runPipeline(false);    % populate everything with the defaults on launch
         h.PRI = numL(cg, r, 'PRI (us)',     100);      h.PW  = numR(cg, r, 'PW (us)',   10);   r = r+1;
         h.Np  = numL(cg, r, 'N pulses',       8, '%d'); h.SNR = numR(cg, r, 'SNR (dB)',  15);  r = r+1;
         h.Mod = dropFull(cg, r, 'Mod type', {'CW', 'LFM chirp'}, 'CW'); r = r+1;
-        h.Bch = numL(cg, r, 'Chirp BW MHz',   3);                                              r = r+1;
+        h.Bch = numL(cg, r, 'Chirp BW MHz',   3);
+        h.PCwin = dropFullAt(cg, r, 3, 4, 'PC window', {'None','Hamming','Blackman'}, 'None'); r = r+1;
 
         sec4(cg, r, 'SOURCE GEOMETRY  (ground truth)'); r = r+1;
         h.Rng = numL(cg, r, 'Range (km)',    15);      h.Az  = numR(cg, r, 'Azim (deg)', 20);  r = r+1;
@@ -362,6 +363,7 @@ runPipeline(false);    % populate everything with the defaults on launch
         % intra-pulse modulation (generator)
         P.modtype = h.Mod.Value;               % 'CW' or 'LFM chirp'
         P.bchirp  = h.Bch.Value * 1e6;         % LFM sweep bandwidth (Hz)
+        P.pcwin   = h.PCwin.Value;             % Rx matched-filter taper (sidelobes)
         % DRFM deception (transmitter)
         P.drdelay = h.Dly.Value * 1e-6;        % range gate pull-off delay (s)
         P.dop     = h.Dop.Value * 1e3;         % initial deception Doppler (Hz)
@@ -533,6 +535,8 @@ runPipeline(false);    % populate everything with the defaults on launch
         R.pc_snrOut       = C.snrOut;
         R.pc_gainMeasured = C.gainMeasured;
         R.pc_Ncoh         = C.Ncoh;
+        R.pc_psl          = C.psl;
+        R.pc_win          = C.pcWin;
 
         if C.active && isfinite(C.tauEst)
             R.tau_est = C.tauEst;
@@ -1533,12 +1537,17 @@ runPipeline(false);    % populate everything with the defaults on launch
         yline(ax2,-3,'--','-3 dB');
         xline(ax2,-S.pc_width3dB*us/2,':');
         xline(ax2, S.pc_width3dB*us/2,':');
+        if isfinite(S.pc_psl)
+            yline(ax2,S.pc_psl,'-.',sprintf('PSL %.1f dB',S.pc_psl), ...
+                'Color',[0.85 0.3 0.1]);
+        end
         hold(ax2,'off');
-        xlim(ax2,[-zoomHalf zoomHalf]*us); ylim(ax2,[-45 2]);
+        xlim(ax2,[-zoomHalf zoomHalf]*us); ylim(ax2,[-70 2]);
         xlabel(ax2,'Time relative to peak (\mus)');
         ylabel(ax2,'Normalized output (dB)');
-        title(ax2,sprintf(['Compressed mainlobe: measured -3 dB width %.3f us  |  ' ...
-            '1/B = %.3f us'],S.pc_width3dB*us,1/P.bchirp*us));
+        title(ax2,sprintf(['Compressed mainlobe: -3 dB width %.3f us | 1/B = %.3f us' ...
+            ' | window %s, PSL %.1f dB'], ...
+            S.pc_width3dB*us,1/P.bchirp*us,S.pc_win,S.pc_psl));
         grid(ax2,'on');
     end
 

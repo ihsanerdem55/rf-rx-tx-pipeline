@@ -12,7 +12,7 @@
             'peakIdx',[],'peakTimes',[],'firstPeakIdx',NaN, ...
             'tauEst',NaN,'width3dB',NaN,'TB',NaN,'gainTheory',NaN, ...
             'toaRes',NaN,'radarRes',NaN,'snrIn',NaN,'snrOut',NaN, ...
-            'gainMeasured',NaN,'Ncoh',0);
+            'gainMeasured',NaN,'Ncoh',0,'psl',NaN,'pcWin','None');
 
         if nargin < 4, riseHint = []; end
         if nargin < 5, fcPulse = []; end
@@ -26,6 +26,9 @@
         tl = tp - P.PW/2;
         K = P.bchirp/P.PW;
         ref = exp(1i*pi*K*tl.^2);             % unit-amplitude rectangular LFM
+        pcwin = 'None'; if isfield(P,'pcwin'), pcwin = P.pcwin; end
+        ref = ref .* pcWindow(L, pcwin);      % receive taper for sidelobe control
+        C.pcWin = pcwin;
         Eref = sum(abs(ref).^2);
 
         % Remove carrier and hop frequency. When pulse-wise estimates are
@@ -99,6 +102,18 @@
         thr3 = peak/sqrt(2);                   % amplitude -3 dB threshold
         il = ip; while il > 1 && mag(il-1) >= thr3, il = il-1; end
         ir = ip; while ir < numel(mag) && mag(ir+1) >= thr3, ir = ir+1; end
+
+        % Peak sidelobe level (PSL): the highest response outside the mainlobe,
+        % searched only in a local window around the peak so the PRI-spaced
+        % neighbouring compressed peaks are not mistaken for sidelobes.
+        psHalf = max(ir-il+1, round(min(0.4*P.PRI, 25/max(P.bchirp,eps))*Fs));
+        ia2 = max(1,ip-psHalf); ib2 = min(numel(mag),ip+psHalf);
+        reg = ia2:ib2; reg = reg(reg < il | reg > ir);
+        if isempty(reg)
+            C.psl = NaN;
+        else
+            C.psl = 20*log10(max(mag(reg))/max(peak,eps) + eps);
+        end
 
         % Estimate input/output SNR using protected pulse/peak regions. These are
         % display diagnostics; the theoretical coherent gain remains 10log10(BT).
