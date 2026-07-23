@@ -156,7 +156,7 @@ runPipeline(false);    % populate everything with the defaults on launch
         h.Fif = numL(cg, r, 'IF (MHz)',       4);                                              r = r+1;
         h.PRI = numL(cg, r, 'PRI (us)',     100);      h.PW  = numR(cg, r, 'PW (us)',   10);   r = r+1;
         h.Np  = numL(cg, r, 'N pulses',       8, '%d'); h.SNR = numR(cg, r, 'SNR (dB)',  15);  r = r+1;
-        h.Mod = dropFull(cg, r, 'Mod type', {'CW', 'LFM chirp'}, 'CW'); r = r+1;
+        h.Mod = dropFull(cg, r, 'Mod type', {'CW', 'LFM chirp', 'NLFM chirp'}, 'CW'); r = r+1;
         h.Bch = numL(cg, r, 'Chirp BW MHz',   3);
         h.PCwin = dropFullAt(cg, r, 3, 4, 'PC window', ...
             {'None','Hann','Taylor','Hamming','Blackman'}, 'None'); r = r+1;
@@ -618,8 +618,8 @@ runPipeline(false);    % populate everything with the defaults on launch
             ia=rise(k); ib=min(numel(z1),ia+L-1); idx=ia:ib;
             tt=(idx-1)/Fs; tl=tt-((rise(k)-1)/Fs+P.PW/2);
             seg=z1(idx);
-            if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
-                seg=seg.*exp(-1i*pi*(P.bchirp/P.PW)*tl.^2);
+            if isChirp(P) && P.bchirp>0
+                seg=seg.*exp(-1i*chirpPhase(tl,P));
             end
             w=0.5-0.5*cos(2*pi*(0:numel(seg)-1)/max(1,numel(seg)-1));
             X=abs(fftshift(fft(seg.*w,Nfft)));
@@ -655,8 +655,8 @@ runPipeline(false);    % populate everything with the defaults on launch
             ia=rise(k); ib=min(numel(z1),ia+L-1); idx=ia:ib;
             tt=(idx-1)/Fs; tl=tt-((rise(k)-1)/Fs+P.PW/2);
             ref=ones(size(tt));
-            if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
-                ref=exp(1i*pi*(P.bchirp/P.PW)*tl.^2);
+            if isChirp(P) && P.bchirp>0
+                ref=exp(1i*chirpPhase(tl,P));
             end
             dehop=exp(-1i*2*pi*(P.Fctr+hopEst(k))*tt);
             coherent(k)=sum(z1(idx).*dehop.*conj(ref))/numel(idx);
@@ -693,9 +693,9 @@ runPipeline(false);    % populate everything with the defaults on launch
         post=round((P.PW+P.mpdelay+0.5*P.PW)*Fs);
         ia=max(1,rise(1)-pre); ib=min(numel(z1),rise(1)+post); idx=ia:ib;
         tt=(idx-1)/Fs;
-        if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
+        if isChirp(P) && P.bchirp>0
             tl=(0:L-1)/Fs-P.PW/2;
-            ref=exp(1i*pi*(P.bchirp/P.PW)*tl.^2);
+            ref=exp(1i*chirpPhase(tl,P));
             bb=z1(idx).*exp(-1i*2*pi*fhat(1)*tt);
             mf=conv(bb,conj(fliplr(ref)),'full'); rp=abs(mf);
             tprof=((ia-1)+(1:numel(mf))-L)/Fs;
@@ -921,9 +921,9 @@ runPipeline(false);    % populate everything with the defaults on launch
         end
 
         L=max(2,round(PW*Fs)); tp=(0:L-1)/Fs;
-        if strcmp(P.modtype,'LFM chirp') && P.bchirp>0
-            K=P.bchirp/PW; tl=tp-PW/2;
-            ref=exp(1i*pi*K*tl.^2);
+        if isChirp(P) && P.bchirp>0
+            tl=tp-PW/2;
+            ref=exp(1i*chirpPhase(tl,P));
             S.victim_rangeRes=P.c/(2*P.bchirp);
         else
             ref=ones(1,L);
@@ -1491,7 +1491,7 @@ runPipeline(false);    % populate everything with the defaults on launch
                 'Units','normalized','HorizontalAlignment','center', ...
                 'FontWeight','bold','FontSize',15);
             text(ax1,0.5,0.43, ...
-                'Select "LFM chirp" and choose a non-zero chirp bandwidth.', ...
+                'Select "LFM chirp" or "NLFM chirp" and a non-zero chirp bandwidth.', ...
                 'Units','normalized','HorizontalAlignment','center');
             title(ax1,'Before / after matched filtering');
             ax1.XTick=[]; ax1.YTick=[];
@@ -1525,9 +1525,9 @@ runPipeline(false);    % populate everything with the defaults on launch
         xlim(ax1,xWide*us); ylim(ax1,[0 1.08]);
         xlabel(ax1,'Time relative to compressed TOA (\mus)');
         ylabel(ax1,'Normalized magnitude');
-        title(ax1,sprintf(['Wide %.2f us LFM pulse -> compressed peak  |  ' ...
+        title(ax1,sprintf(['Wide %.2f us %s -> compressed peak  |  ' ...
             'BT = %.1f, theoretical gain %.1f dB'], ...
-            P.PW*us,S.pc_TB,S.pc_gainTheory));
+            P.PW*us,P.modtype,S.pc_TB,S.pc_gainTheory));
         legend(ax1,legH,legT,'Location','best');
         grid(ax1,'on');
 
@@ -1899,7 +1899,7 @@ runPipeline(false);    % populate everything with the defaults on launch
         % Range error expressed in one-way range-resolution cells (the same
         % resolution the app reports for pulse compression): teaches WHY LFM
         % compression tightens the geolocation range far below the CW limit.
-        if strcmp(P.modtype,'LFM chirp') && P.bchirp > 0
+        if isChirp(P) && P.bchirp > 0
             resCell = P.c / P.bchirp;                 % one-way, c/B (= S.pc_toaRes)
             resTxt  = sprintf('LFM c/B = %.1f m', resCell);
         else
@@ -1933,11 +1933,11 @@ runPipeline(false);    % populate everything with the defaults on launch
 
     function s = pulseCompressionStatus()
         if isfield(S,'pc_active') && S.pc_active
-            s = 'ACTIVE (LFM matched filter)';
-        elseif strcmp(S.P.modtype,'LFM chirp')
+            s = sprintf('ACTIVE (%s matched filter)', S.P.modtype);
+        elseif isChirp(S.P)
             s = 'INACTIVE (no valid compressed peak)';
         else
-            s = 'OFF (select LFM chirp)';
+            s = 'OFF (select LFM or NLFM chirp)';
         end
     end
 

@@ -32,8 +32,7 @@
         c1 = complex(zeros(1,Ntot));
         c2 = complex(zeros(1,Ntot));
         c3 = complex(zeros(1,Ntot));
-        lfm = strcmp(P.modtype,'LFM chirp');
-        K = 0; if lfm, K = P.bchirp/P.PW; end
+        isCh = isChirp(P) && P.bchirp > 0;   % LFM or NLFM sweep present
 
         fcProcTrue = P.Fctr + hopTrue + P.fdRx;
         rfTrue = P.Frf + hopTrue + P.fdRx;
@@ -48,7 +47,7 @@
                 gate(idx) = 1;
                 tl = t(idx)-(t0+P.PW/2);
                 intra = zeros(size(tl));
-                if lfm, intra = pi*K*tl.^2; end
+                if isCh, intra = chirpPhase(tl, P); end
                 b = exp(1i*(2*pi*fproc*t(idx)+intra));
                 dF = 2*pi*P.base*sind(P.Az)/lambda;
                 dS = 2*pi*P.bshort*sind(P.Az)/lambda;
@@ -64,7 +63,7 @@
                 if ~isempty(im)
                     tlm = t(im)-(tm+P.PW/2);
                     intraM = zeros(size(tlm));
-                    if lfm, intraM = pi*K*tlm.^2; end
+                    if isCh, intraM = chirpPhase(tlm, P); end
                     % Ground reflection: excess propagation phase plus a pi
                     % phase reversal. Using the RF phase makes small path-delay
                     % changes produce realistic constructive/destructive fading.

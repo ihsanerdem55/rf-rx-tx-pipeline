@@ -76,7 +76,7 @@
         P.kbeta = min(20, max(0, P.kbeta));    % Kaiser beta 0..20
 
         % --- LFM chirp: keep the sweep inside the sampled band ------------
-        if strcmp(P.modtype, 'LFM chirp')
+        if isChirp(P)
             if P.bchirp < 0
                 P.bchirp = abs(P.bchirp);
                 notes{end+1} = 'Negative chirp BW interpreted as a positive bandwidth.';
@@ -100,7 +100,7 @@
         end
 
         chirpHalf = 0;
-        if strcmp(P.modtype,'LFM chirp'), chirpHalf = P.bchirp/2; end
+        if isChirp(P), chirpHalf = P.bchirp/2; end
 
         % --- moving emitter, multipath and agility -----------------------
         if ~isfinite(P.vrad), P.vrad = 0; end
@@ -121,7 +121,7 @@
         if P.multipath && P.mpdelay == 0
             notes{end+1} = 'Multipath delay is zero: reflection only changes amplitude/DF phase, not range.';
         end
-        if P.multipath && strcmp(P.modtype,'LFM chirp') && P.bchirp > 0 && ...
+        if P.multipath && isChirp(P) && P.bchirp > 0 && ...
                 P.mpdelay < 1/P.bchirp
             notes{end+1} = 'Multipath delay is below approximately 1/B: direct and reflected range peaks are unresolved.';
         end
@@ -229,7 +229,7 @@
         end
 
         % --- RF front-end / domain sanity ---------------------------------
-        chirpHalf = 0; if strcmp(P.modtype,'LFM chirp'), chirpHalf = P.bchirp/2; end
+        chirpHalf = 0; if isChirp(P), chirpHalf = P.bchirp/2; end
         if P.iq
             % Baseband: content spans +/-(chirpHalf); need that < Nyquist.
             if chirpHalf >= nyq

@@ -31,8 +31,10 @@ display**, so the DSP core can be exercised and validated headlessly:
 
 `pulse_compression_demo` shows two teaching experiments — receive weighting on
 an LFM matched filter (the range-sidelobe / mainlobe-width trade-off, reusing
-the app's `pcWindow` taper) and a waveform comparison (CW vs LFM vs a Barker-13
-phase code).
+the app's `pcWindow` taper) and a waveform comparison (CW vs LFM vs NLFM vs a
+Barker-13 phase code). The **NLFM chirp** is also selectable in the app's *Mod
+type* control; its stationary-phase design lowers range sidelobes (~ -24 dB)
+without the SNR loss of a receive window.
 
 ## Project layout
 

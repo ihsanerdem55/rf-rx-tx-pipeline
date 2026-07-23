@@ -16,7 +16,7 @@
 
         if nargin < 4, riseHint = []; end
         if nargin < 5, fcPulse = []; end
-        if ~strcmp(P.modtype,'LFM chirp') || ~(P.bchirp > 0) || isempty(z)
+        if ~isChirp(P) || ~(P.bchirp > 0) || isempty(z)
             return
         end
 
@@ -24,8 +24,7 @@
         L = max(2,round(P.PW*Fs));
         tp = (0:L-1)/Fs;
         tl = tp - P.PW/2;
-        K = P.bchirp/P.PW;
-        ref = exp(1i*pi*K*tl.^2);             % unit-amplitude rectangular LFM
+        ref = exp(1i*chirpPhase(tl, P));      % unit-amplitude LFM or NLFM sweep
         pcwin = 'None'; if isfield(P,'pcwin'), pcwin = P.pcwin; end
         ref = ref .* pcWindow(L, pcwin);      % receive taper for sidelobe control
         C.pcWin = pcwin;
