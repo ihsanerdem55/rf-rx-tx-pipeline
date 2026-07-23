@@ -103,12 +103,17 @@
         il = ip; while il > 1 && mag(il-1) >= thr3, il = il-1; end
         ir = ip; while ir < numel(mag) && mag(ir+1) >= thr3, ir = ir+1; end
 
-        % Peak sidelobe level (PSL): the highest response outside the mainlobe,
-        % searched only in a local window around the peak so the PRI-spaced
-        % neighbouring compressed peaks are not mistaken for sidelobes.
-        psHalf = max(ir-il+1, round(min(0.4*P.PRI, 25/max(P.bchirp,eps))*Fs));
+        % Peak sidelobe level (PSL): the highest response BEYOND the mainlobe
+        % nulls (not the -3 dB edges -- the skirt between the -3 dB points and
+        % the first null is part of the mainlobe and would swamp the true
+        % sidelobes). Walk out from the peak until the magnitude stops falling
+        % to locate the first null on each side, then search a local window so
+        % the PRI-spaced neighbouring compressed peaks are not counted.
+        nl = ip; while nl > 1        && mag(nl-1) <= mag(nl), nl = nl-1; end
+        nr = ip; while nr < numel(mag) && mag(nr+1) <= mag(nr), nr = nr+1; end
+        psHalf = max(nr-nl+1, round(min(0.4*P.PRI, 25/max(P.bchirp,eps))*Fs));
         ia2 = max(1,ip-psHalf); ib2 = min(numel(mag),ip+psHalf);
-        reg = ia2:ib2; reg = reg(reg < il | reg > ir);
+        reg = ia2:ib2; reg = reg(reg < nl | reg > nr);
         if isempty(reg)
             C.psl = NaN;
         else

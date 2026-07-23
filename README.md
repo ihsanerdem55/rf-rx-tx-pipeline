@@ -18,6 +18,22 @@ The entry point adds `lib/` (and its subfolders) to the path automatically, so
 you only need `rf_rxtx_pipeline.m` on your path or to be in this
 folder when you launch it.
 
+## Demos
+
+Standalone scripts under `demos/` run in **base MATLAB with no GUI and no
+display**, so the DSP core can be exercised and validated headlessly:
+
+```matlab
+>> addpath demos
+>> pulse_compression_demo          % prints tables (+ plots if a display exists)
+>> pulse_compression_demo(false)   % tables only
+```
+
+`pulse_compression_demo` shows two teaching experiments — receive weighting on
+an LFM matched filter (the range-sidelobe / mainlobe-width trade-off, reusing
+the app's `pcWindow` taper) and a waveform comparison (CW vs LFM vs a Barker-13
+phase code).
+
 ## Project layout
 
 The app used to be a single ~3800-line file. It is now split into a small app

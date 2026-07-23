@@ -158,7 +158,8 @@ runPipeline(false);    % populate everything with the defaults on launch
         h.Np  = numL(cg, r, 'N pulses',       8, '%d'); h.SNR = numR(cg, r, 'SNR (dB)',  15);  r = r+1;
         h.Mod = dropFull(cg, r, 'Mod type', {'CW', 'LFM chirp'}, 'CW'); r = r+1;
         h.Bch = numL(cg, r, 'Chirp BW MHz',   3);
-        h.PCwin = dropFullAt(cg, r, 3, 4, 'PC window', {'None','Hamming','Blackman'}, 'None'); r = r+1;
+        h.PCwin = dropFullAt(cg, r, 3, 4, 'PC window', ...
+            {'None','Hann','Taylor','Hamming','Blackman'}, 'None'); r = r+1;
 
         sec4(cg, r, 'SOURCE GEOMETRY  (ground truth)'); r = r+1;
         h.Rng = numL(cg, r, 'Range (km)',    15);      h.Az  = numR(cg, r, 'Azim (deg)', 20);  r = r+1;
