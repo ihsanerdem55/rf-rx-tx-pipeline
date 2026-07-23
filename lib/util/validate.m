@@ -100,7 +100,7 @@
         end
 
         chirpHalf = 0;
-        if isChirp(P), chirpHalf = P.bchirp/2; end
+        if isCompressible(P), chirpHalf = effBW(P)/2; end
 
         % --- moving emitter, multipath and agility -----------------------
         if ~isfinite(P.vrad), P.vrad = 0; end
@@ -121,8 +121,8 @@
         if P.multipath && P.mpdelay == 0
             notes{end+1} = 'Multipath delay is zero: reflection only changes amplitude/DF phase, not range.';
         end
-        if P.multipath && isChirp(P) && P.bchirp > 0 && ...
-                P.mpdelay < 1/P.bchirp
+        if P.multipath && isCompressible(P) && effBW(P) > 0 && ...
+                P.mpdelay < 1/effBW(P)
             notes{end+1} = 'Multipath delay is below approximately 1/B: direct and reflected range peaks are unresolved.';
         end
 
@@ -229,7 +229,7 @@
         end
 
         % --- RF front-end / domain sanity ---------------------------------
-        chirpHalf = 0; if isChirp(P), chirpHalf = P.bchirp/2; end
+        chirpHalf = 0; if isCompressible(P), chirpHalf = effBW(P)/2; end
         if P.iq
             % Baseband: content spans +/-(chirpHalf); need that < Nyquist.
             if chirpHalf >= nyq

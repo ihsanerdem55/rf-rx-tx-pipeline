@@ -16,7 +16,8 @@
 
         if nargin < 4, riseHint = []; end
         if nargin < 5, fcPulse = []; end
-        if ~isChirp(P) || ~(P.bchirp > 0) || isempty(z)
+        Beff = effBW(P);                      % sweep BW (chirp) or chip rate (code)
+        if ~isCompressible(P) || ~(Beff > 0) || isempty(z)
             return
         end
 
@@ -24,7 +25,7 @@
         L = max(2,round(P.PW*Fs));
         tp = (0:L-1)/Fs;
         tl = tp - P.PW/2;
-        ref = exp(1i*chirpPhase(tl, P));      % unit-amplitude LFM or NLFM sweep
+        ref = exp(1i*chirpPhase(tl, P));      % unit-amplitude chirp or phase code
         pcwin = 'None'; if isfield(P,'pcwin'), pcwin = P.pcwin; end
         ref = ref .* pcWindow(L, pcwin);      % receive taper for sidelobe control
         C.pcWin = pcwin;
@@ -74,7 +75,7 @@
         % Refine each expected PRI-spaced peak in a narrow local window, then
         % use three-point parabolic interpolation for fractional-sample TOA.
         localHalf = max(3,min(round(0.2*P.PW*Fs), ...
-            max(3,round(3*Fs/P.bchirp))));
+            max(3,round(3*Fs/Beff))));
         targets = targets(targets>=1 & targets<=numel(mag));
         nPeak = numel(targets);
         pidx = zeros(1,nPeak); ptime = NaN(1,nPeak);
@@ -110,7 +111,7 @@
         % the PRI-spaced neighbouring compressed peaks are not counted.
         nl = ip; while nl > 1        && mag(nl-1) <= mag(nl), nl = nl-1; end
         nr = ip; while nr < numel(mag) && mag(nr+1) <= mag(nr), nr = nr+1; end
-        psHalf = max(nr-nl+1, round(min(0.4*P.PRI, 25/max(P.bchirp,eps))*Fs));
+        psHalf = max(nr-nl+1, round(min(0.4*P.PRI, 25/max(Beff,eps))*Fs));
         ia2 = max(1,ip-psHalf); ib2 = min(numel(mag),ip+psHalf);
         reg = ia2:ib2; reg = reg(reg < nl | reg > nr);
         if isempty(reg)
@@ -135,7 +136,7 @@
         C.snrIn = 20*log10(max(sigAmpIn,eps)/max(noiseAmpIn,eps));
 
         sigMaskOut = false(size(mag));
-        protect = max(2,round(2*Fs/P.bchirp));
+        protect = max(2,round(2*Fs/Beff));
         for q = 1:numel(pidx)
             ia = max(1,pidx(q)-protect); ib = min(numel(mag),pidx(q)+protect);
             sigMaskOut(ia:ib) = true;
@@ -157,8 +158,8 @@
         C.firstPeakIdx = ip;
         C.tauEst = ptime(1);
         C.width3dB = (ir-il+1)/Fs;
-        C.TB = P.PW*P.bchirp;
+        C.TB = P.PW*Beff;
         C.gainTheory = 10*log10(max(C.TB,1));
-        C.toaRes = P.c/P.bchirp;               % one-way R=c*tau resolution scale
-        C.radarRes = P.c/(2*P.bchirp);         % conventional monostatic radar
+        C.toaRes = P.c/Beff;               % one-way R=c*tau resolution scale
+        C.radarRes = P.c/(2*Beff);         % conventional monostatic radar
     end

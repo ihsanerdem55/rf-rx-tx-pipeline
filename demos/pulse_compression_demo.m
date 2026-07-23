@@ -92,20 +92,14 @@ function waves = buildWaveforms(Fs, PW, B, L)
     tl  = (0:L-1)/Fs - PW/2;
     cw  = ones(1, L);                                   % rectangular CW, TB = 1
     lfm = exp(1i*pi*(B/PW)*tl.^2);                      % LFM chirp
-    Pn  = struct('modtype', 'NLFM chirp', 'bchirp', B, 'PW', PW);
+    Pn   = struct('modtype', 'NLFM chirp',      'bchirp', B, 'PW', PW);
+    Pb   = struct('modtype', 'Barker-13 code',  'bchirp', 0, 'PW', PW);
     nlfm = exp(1i*chirpPhase(tl, Pn));                  % NLFM (shared lib design)
-    bark = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1];             % Barker-13
-    chip = max(1, floor(L/numel(bark)));
-    code = repelem(bark, chip);
-    if numel(code) < L
-        code = [code, repmat(code(end), 1, L-numel(code))];
-    else
-        code = code(1:L);
-    end
+    code = exp(1i*chirpPhase(tl, Pb));                  % Barker-13 (shared lib code)
     waves = struct( ...
         'name', {'CW (rect)', 'LFM chirp', 'NLFM chirp', 'Barker-13'}, ...
-        'x',    {complex(cw), lfm, nlfm, complex(code)}, ...
-        'TB',   {1, PW*B, PW*B, numel(bark)});
+        'x',    {complex(cw), lfm, nlfm, code}, ...
+        'TB',   {1, PW*B, PW*B, 13});
 end
 
 % =====================================================================

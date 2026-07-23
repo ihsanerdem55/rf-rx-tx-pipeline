@@ -32,7 +32,7 @@
         c1 = complex(zeros(1,Ntot));
         c2 = complex(zeros(1,Ntot));
         c3 = complex(zeros(1,Ntot));
-        isCh = isChirp(P) && P.bchirp > 0;   % LFM or NLFM sweep present
+        isCh = isCompressible(P);            % LFM/NLFM sweep or phase code present
 
         fcProcTrue = P.Fctr + hopTrue + P.fdRx;
         rfTrue = P.Frf + hopTrue + P.fdRx;
