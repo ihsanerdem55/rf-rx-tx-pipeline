@@ -18,6 +18,18 @@ The entry point adds `lib/` (and its subfolders) to the path automatically, so
 you only need `rf_rxtx_pipeline.m` on your path or to be in this
 folder when you launch it.
 
+## Emitter antenna scan
+
+The *Emitter antenna scan* control models a scanning emitter beam that
+amplitude-modulates the received pulse train: **Circular** (a rotating search
+beam gives one mainlobe flash per revolution) or **Conical** (a nutating
+tracker gives sinusoidal modulation at the scan rate). The receiver estimates
+the scan rate from the dominant line in the slow-time spectrum of the pulse
+*amplitudes* (Doppler lives in the phase), and the result panel reports true vs
+estimated rate. As with Doppler, the scan rate is only recoverable below PRF/2
+and when the CPI spans at least one scan cycle — raise *N pulses* to resolve
+slower scans (the panel flags both limits).
+
 ## Demos
 
 Standalone scripts under `demos/` run in **base MATLAB with no GUI and no

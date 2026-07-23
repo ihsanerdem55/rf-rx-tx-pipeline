@@ -138,13 +138,13 @@ runPipeline(false);    % populate everything with the defaults on launch
         % height (no '1x'), so when the total content is taller than the
         % viewport a scrollbar appears -- fixing panels that don't fully fit.
         ctrlPanel = uipanel(outer, 'Title', 'Controls', 'Scrollable', 'on');
-        cg = uigridlayout(ctrlPanel, [58 4]);
+        cg = uigridlayout(ctrlPanel, [61 4]);
         cg.Scrollable = 'on';               % <-- scrollbar on the control grid
         % Fixed-height rows keep the expanded EW-duel controls predictable;
         % the parent panel remains scrollable.
-        cg.RowHeight = repmat({28}, 1, 58);
-        cg.RowHeight{57} = 32;               % run buttons
-        cg.RowHeight{58} = 1320;             % results / diagnostics
+        cg.RowHeight = repmat({28}, 1, 61);
+        cg.RowHeight{60} = 32;               % run buttons
+        cg.RowHeight{61} = 1320;             % results / diagnostics
         cg.ColumnWidth = {90, '1x', 90, '1x'};
         cg.RowSpacing = 4;
         cg.Padding = [8 8 8 8];
@@ -168,6 +168,10 @@ runPipeline(false);    % populate everything with the defaults on launch
         h.Vrad = numL(cg, r, 'Rad vel m/s',   0);      h.MPloss = numR(cg, r, 'MP loss dB', 10); r = r+1;
         h.MPdly = numL(cg, r, 'MP extra us',  3);      h.MPaz = numR(cg, r, 'MP az deg', -15);  r = r+1;
         h.MPmode = dropFull(cg, r, 'Multipath', {'Off', 'On'}, 'Off'); r = r+1;
+
+        sec4(cg, r, 'EMITTER ANTENNA SCAN'); r = r+1;
+        h.Scan = dropFull(cg, r, 'Scan mode', {'Off', 'Circular', 'Conical'}, 'Off'); r = r+1;
+        h.ScanRate = numL(cg, r, 'Scan rate Hz', 2000); h.ScanBW = numR(cg, r, 'Beamwidth deg', 20); r = r+1;
 
         sec4(cg, r, 'EMITTER PRI / FREQUENCY AGILITY'); r = r+1;
         h.PRImode = dropFull(cg, r, 'PRI mode', ...
@@ -407,6 +411,9 @@ runPipeline(false);    % populate everything with the defaults on launch
         P.mploss = h.MPloss.Value;             % reflected-path voltage loss in dB
         P.mpdelay = h.MPdly.Value * 1e-6;      % excess reflected-path delay (s)
         P.mpaz = h.MPaz.Value;                 % apparent arrival angle of reflection
+        P.scanmode = h.Scan.Value;             % antenna scan: Off / Circular / Conical
+        P.scanrate = h.ScanRate.Value;         % scan / nutation rate (Hz)
+        P.scanbw   = h.ScanBW.Value;           % beam -3 dB width (deg), circular flash
         P.primode = h.PRImode.Value;
         P.pridev = h.PRIdev.Value / 100;       % fractional stagger/jitter depth
         P.fhmode = h.FHmode.Value;
@@ -683,8 +690,19 @@ runPipeline(false);    % populate everything with the defaults on launch
             velHat=fdHat*P.c/max(P.Frf,eps);
             mti=[0 diff(coherent)];
             A.mti_gain=20*log10((sqrt(mean(abs(mti).^2))+eps)/(sqrt(mean(abs(coherent).^2))+eps));
+
+            % Antenna-scan estimate: the beam sweep amplitude-modulates the
+            % pulse train, so the dominant line in the slow-time spectrum of the
+            % pulse AMPLITUDES (as opposed to phase, which carries Doppler) is
+            % the scan rate. Resolvable for rate < PRF/2 with >~1 cycle in CPI.
+            ampSeq=abs(coherent); ampDet=ampSeq-mean(ampSeq);
+            scanSpec=abs(E*(ampDet.*wp).');
+            scanSpec(fgrid<=0)=0;                 % positive frequencies only
+            [~,isc]=max(scanSpec); A.scan_rate_est=fgrid(isc);
+            A.scan_depth_est=(max(ampSeq)-min(ampSeq))/(max(ampSeq)+min(ampSeq)+eps);
         else
             fgrid=[]; pdDB=[]; fdHat=NaN; velAxis=[]; velHat=NaN; mti=0;
+            A.scan_rate_est=NaN; A.scan_depth_est=NaN;
         end
 
         % First-pulse excess-path range profile. LFM gives a compressed direct
@@ -1926,7 +1944,21 @@ runPipeline(false);    % populate everything with the defaults on launch
             P.Az,        S.Az_est,            azErr,  scoreBadge(abs(azErr),  1, 3), ...
             P.vrad,      S.vel_rx_est,        velErr, scoreBadge(abs(velErr), 1, 5), ...
             rngCells,    resTxt);
-        txt=[scorecard, txt];
+        % Antenna-scan readout (only when a scan is active).
+        if ~strcmp(P.scanmode,'Off')
+            prfTrue = 1/max(P.PRI,eps);
+            scanBlk = sprintf([ ...
+                'ANTENNA SCAN\n-------------------------\n' ...
+                'Mode        : %s\n' ...
+                'Scan rate   : true %.0f Hz / est %.0f Hz\n' ...
+                'Mod depth   : %8.0f %%\n' ...
+                'Cycles in CPI: %7.2f   (PRF/2 limit %.0f Hz)\n\n'], ...
+                P.scanmode, P.scanrate, S.scan_rate_est, 100*S.scan_depth_est, ...
+                P.scanrate*P.Np*P.PRI, 0.5*prfTrue);
+        else
+            scanBlk = '';
+        end
+        txt=[scorecard, scanBlk, txt];
 
         h.results.Text=txt;
     end

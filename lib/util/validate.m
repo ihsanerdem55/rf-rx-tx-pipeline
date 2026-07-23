@@ -126,6 +126,20 @@
             notes{end+1} = 'Multipath delay is below approximately 1/B: direct and reflected range peaks are unresolved.';
         end
 
+        % --- antenna scan modulation -------------------------------------
+        if ~isfield(P,'scanmode'), P.scanmode = 'Off'; end
+        P.scanrate = max(0, P.scanrate);
+        P.scanbw   = min(180, max(0.5, P.scanbw));
+        if ~strcmp(P.scanmode,'Off')
+            prfTrue = 1/P.PRI;
+            if P.scanrate > 0.5*prfTrue
+                notes{end+1} = sprintf('Scan rate above PRF/2 (%.0f Hz): the scan-rate estimate will alias.', 0.5*prfTrue);
+            end
+            if P.scanrate*P.Np*P.PRI < 1
+                notes{end+1} = 'Under one scan cycle in the CPI: raise N pulses (or scan rate) to resolve the scan.';
+            end
+        end
+
         P.pridev = min(0.45, max(0, P.pridev));
         if strcmp(P.primode,'Constant'), P.pridev = 0; end
         P.hopstep = abs(P.hopstep);

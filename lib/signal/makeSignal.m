@@ -39,6 +39,7 @@
         for k = 1:P.Np
             fproc = fcProcTrue(k);
             lambda = P.c/max(rfTrue(k),eps);
+            gscan = scanGain(emitTimes(k), P);   % antenna-scan amplitude at emission
 
             % ---------------- direct path ----------------
             t0 = arrival(k);
@@ -48,7 +49,7 @@
                 tl = t(idx)-(t0+P.PW/2);
                 intra = zeros(size(tl));
                 if isCh, intra = chirpPhase(tl, P); end
-                b = exp(1i*(2*pi*fproc*t(idx)+intra));
+                b = gscan*exp(1i*(2*pi*fproc*t(idx)+intra));
                 dF = 2*pi*P.base*sind(P.Az)/lambda;
                 dS = 2*pi*P.bshort*sind(P.Az)/lambda;
                 c1(idx) = c1(idx)+b;
@@ -68,7 +69,7 @@
                     % phase reversal. Using the RF phase makes small path-delay
                     % changes produce realistic constructive/destructive fading.
                     reflPhase = -2*pi*rfTrue(k)*P.mpdelay + pi;
-                    bm = P.mpamp*exp(1i*(2*pi*fproc*t(im)+intraM+reflPhase));
+                    bm = gscan*P.mpamp*exp(1i*(2*pi*fproc*t(im)+intraM+reflPhase));
                     dFm = 2*pi*P.base*sind(P.mpaz)/lambda;
                     dSm = 2*pi*P.bshort*sind(P.mpaz)/lambda;
                     c1(im) = c1(im)+bm;
